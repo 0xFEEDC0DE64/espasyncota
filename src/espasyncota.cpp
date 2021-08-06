@@ -30,8 +30,9 @@ constexpr int END_TASK_BIT = BIT5;
 constexpr int TASK_ENDED = BIT6;
 } // namespace
 
-EspAsyncOta::EspAsyncOta(const char *taskName, espcpputils::CoreAffinity coreAffinity) :
+EspAsyncOta::EspAsyncOta(const char *taskName, uint32_t stackSize, espcpputils::CoreAffinity coreAffinity) :
     m_taskName{taskName},
+    m_stackSize{stackSize},
     m_coreAffinity{coreAffinity}
 {
     assert(m_eventGroup.handle);
@@ -54,7 +55,7 @@ tl::expected<void, std::string> EspAsyncOta::startTask()
 
     m_eventGroup.clearBits(TASK_RUNNING | START_REQUEST_BIT | REQUEST_RUNNING_BIT | REQUEST_FINISHED_BIT | REQUEST_SUCCEEDED_BIT | END_TASK_BIT | TASK_ENDED);
 
-    const auto result = espcpputils::createTask(otaTask, m_taskName, 8192, this, 10, &m_taskHandle, m_coreAffinity);
+    const auto result = espcpputils::createTask(otaTask, m_taskName, m_stackSize, this, 10, &m_taskHandle, m_coreAffinity);
     if (result != pdPASS)
     {
         auto msg = fmt::format("failed creating http task {}", result);

@@ -27,7 +27,7 @@ enum OtaCloudUpdateStatus
 class EspAsyncOta
 {
 public:
-    EspAsyncOta(const char *taskName="asyncOtaTask", espcpputils::CoreAffinity coreAffinity=espcpputils::CoreAffinity::Core1);
+    EspAsyncOta(const char *taskName="asyncOtaTask", uint32_t stackSize=2048, espcpputils::CoreAffinity coreAffinity=espcpputils::CoreAffinity::Core1);
     ~EspAsyncOta();
 
     tl::expected<void, std::string> startTask();
@@ -48,6 +48,7 @@ private:
     void otaTask();
 
     const char * const m_taskName;
+    const uint32_t m_stackSize;
     const espcpputils::CoreAffinity m_coreAffinity;
 
     int m_progress{};

@@ -14,20 +14,21 @@
 #include "taskutils.h"
 #include "wrappers/event_group.h"
 #include "espchrono.h"
+#include "cpptypesafeenum.h"
 
-enum OtaCloudUpdateStatus
-{
-    Idle,
-    Updating,
-    Failed,
-    Succeeded,
-    NotReady
-};
+#define OtaCloudUpdateStatusValues(x) \
+    x(Idle) \
+    x(Updating) \
+    x(Failed) \
+    x(Succeeded) \
+    x(NotReady)
+DECLARE_TYPESAFE_ENUM(OtaCloudUpdateStatus, : uint8_t, OtaCloudUpdateStatusValues)
+IMPLEMENT_TYPESAFE_ENUM(OtaCloudUpdateStatus, : uint8_t, OtaCloudUpdateStatusValues)
 
 class EspAsyncOta
 {
 public:
-    EspAsyncOta(const char *taskName="asyncOtaTask", uint32_t stackSize=2048, espcpputils::CoreAffinity coreAffinity=espcpputils::CoreAffinity::Core1);
+    EspAsyncOta(const char *taskName="asyncOtaTask", uint32_t stackSize=4096, espcpputils::CoreAffinity coreAffinity=espcpputils::CoreAffinity::Core1);
     ~EspAsyncOta();
 
     tl::expected<void, std::string> startTask();

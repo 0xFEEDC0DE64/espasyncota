@@ -7,12 +7,15 @@ set(sources
 )
 
 set(dependencies
+    esp_https_ota
+
+    expected
+    fmt
+
     cpputils
     espchrono
     espcpputils
-    esp_https_ota
-    expected
-    fmt
+    esphttpdutils
 )
 
 idf_component_register(

@@ -13,7 +13,7 @@
 
 // local includes
 #include "cleanuphelper.h"
-#include "espstrutils.h"
+#include "esphttpdutils.h"
 #include "tickchrono.h"
 
 using namespace std::chrono_literals;
@@ -155,8 +155,8 @@ tl::expected<void, std::string> EspAsyncOta::trigger(std::string_view url, std::
     if (url.empty())
         return tl::make_unexpected("empty firmware url");
 
-    if (const auto result = espcpputils::urlverify(url); !result)
-        return result;
+    if (const auto result = esphttpdutils::urlverify(url); !result)
+        return tl::make_unexpected(fmt::format("could not verify firmware url: {}", result.error()));
 
     m_url = std::string{url};
     m_cert_pem = cert_pem;

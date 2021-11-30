@@ -21,13 +21,14 @@ using namespace std::chrono_literals;
 namespace {
 constexpr const char * const TAG = "ASYNC_OTA";
 
-constexpr int TASK_RUNNING = BIT0;
+constexpr int TASK_RUNNING_BIT = BIT0;
 constexpr int START_REQUEST_BIT = BIT1;
 constexpr int REQUEST_RUNNING_BIT = BIT2;
 constexpr int REQUEST_FINISHED_BIT = BIT3;
 constexpr int REQUEST_SUCCEEDED_BIT = BIT4;
 constexpr int END_TASK_BIT = BIT5;
-constexpr int TASK_ENDED = BIT6;
+constexpr int TASK_ENDED_BIT = BIT6;
+constexpr int ABORT_REQUEST_BIT = BIT7;
 } // namespace
 
 EspAsyncOta::EspAsyncOta(const char *taskName, uint32_t stackSize, espcpputils::CoreAffinity coreAffinity) :
@@ -45,42 +46,48 @@ EspAsyncOta::~EspAsyncOta()
 
 tl::expected<void, std::string> EspAsyncOta::startTask()
 {
-    if (const auto bits = m_eventGroup.getBits();
-        bits & TASK_RUNNING || m_taskHandle)
+    if (m_taskHandle)
     {
-        constexpr auto msg = "task already started";
+        constexpr auto msg = "ota task handle is not null";
         ESP_LOGW(TAG, "%s", msg);
         return tl::make_unexpected(msg);
     }
 
-    m_eventGroup.clearBits(TASK_RUNNING | START_REQUEST_BIT | REQUEST_RUNNING_BIT | REQUEST_FINISHED_BIT | REQUEST_SUCCEEDED_BIT | END_TASK_BIT | TASK_ENDED);
+    if (const auto bits = m_eventGroup.getBits(); bits & TASK_RUNNING_BIT)
+    {
+        constexpr auto msg = "ota task already running";
+        ESP_LOGW(TAG, "%s", msg);
+        return tl::make_unexpected(msg);
+    }
+
+    m_eventGroup.clearBits(TASK_RUNNING_BIT | START_REQUEST_BIT | REQUEST_RUNNING_BIT | REQUEST_FINISHED_BIT | REQUEST_SUCCEEDED_BIT | END_TASK_BIT | TASK_ENDED_BIT | ABORT_REQUEST_BIT);
 
     const auto result = espcpputils::createTask(otaTask, m_taskName, m_stackSize, this, 10, &m_taskHandle, m_coreAffinity);
     if (result != pdPASS)
     {
-        auto msg = fmt::format("failed creating http task {}", result);
+        auto msg = fmt::format("failed creating ota task {}", result);
         ESP_LOGE(TAG, "%.*s", msg.size(), msg.data());
         return tl::make_unexpected(std::move(msg));
     }
 
     if (!m_taskHandle)
     {
-        constexpr auto msg = "http task handle is null";
+        constexpr auto msg = "ota task handle is null";
         ESP_LOGW(TAG, "%s", msg);
         return tl::make_unexpected(msg);
     }
 
-    ESP_LOGD(TAG, "created http task %s", m_taskName);
+    ESP_LOGD(TAG, "created ota task %s", m_taskName);
 
-    if (const auto bits = m_eventGroup.waitBits(TASK_RUNNING, false, false, std::chrono::ceil<espcpputils::ticks>(1s).count());
-        bits & TASK_RUNNING)
+    if (const auto bits = m_eventGroup.waitBits(TASK_RUNNING_BIT, false, false, std::chrono::ceil<espcpputils::ticks>(1s).count());
+        bits & TASK_RUNNING_BIT)
         return {};
 
-    ESP_LOGW(TAG, "http task %s TASK_RUNNING bit not yet set...", m_taskName);
+    ESP_LOGW(TAG, "ota task %s TASK_RUNNING_BIT bit not yet set...", m_taskName);
 
     while (true)
-        if (const auto bits = m_eventGroup.waitBits(TASK_RUNNING, false, false, portMAX_DELAY);
-            bits & TASK_RUNNING)
+        if (const auto bits = m_eventGroup.waitBits(TASK_RUNNING_BIT, false, false, portMAX_DELAY);
+            bits & TASK_RUNNING_BIT)
             break;
 
     return {};
@@ -89,7 +96,7 @@ tl::expected<void, std::string> EspAsyncOta::startTask()
 tl::expected<void, std::string> EspAsyncOta::endTask()
 {
     if (const auto bits = m_eventGroup.getBits();
-        !(bits & TASK_RUNNING))
+        !(bits & TASK_RUNNING_BIT))
         return {};
     else if (bits & END_TASK_BIT)
     {
@@ -100,18 +107,18 @@ tl::expected<void, std::string> EspAsyncOta::endTask()
 
     m_eventGroup.setBits(END_TASK_BIT);
 
-    if (const auto bits = m_eventGroup.waitBits(TASK_ENDED, true, false, std::chrono::ceil<espcpputils::ticks>(1s).count());
-        bits & TASK_ENDED)
+    if (const auto bits = m_eventGroup.waitBits(TASK_ENDED_BIT, true, false, std::chrono::ceil<espcpputils::ticks>(1s).count());
+        bits & TASK_ENDED_BIT)
     {
         ESP_LOGD(TAG, "ota task %s ended", m_taskName);
         return {};
     }
 
-    ESP_LOGW(TAG, "ota task %s TASK_ENDED bit not yet set...", m_taskName);
+    ESP_LOGW(TAG, "ota task %s TASK_ENDED_BIT bit not yet set...", m_taskName);
 
     while (true)
-        if (const auto bits = m_eventGroup.waitBits(TASK_ENDED, true, false, portMAX_DELAY);
-            bits & TASK_ENDED)
+        if (const auto bits = m_eventGroup.waitBits(TASK_ENDED_BIT, true, false, portMAX_DELAY);
+            bits & TASK_ENDED_BIT)
             break;
 
     ESP_LOGD(TAG, "ota task %s ended", m_taskName);
@@ -121,7 +128,7 @@ tl::expected<void, std::string> EspAsyncOta::endTask()
 
 OtaCloudUpdateStatus EspAsyncOta::status() const
 {
-    if (const auto bits = m_eventGroup.getBits(); !(bits & TASK_RUNNING))
+    if (const auto bits = m_eventGroup.getBits(); !(bits & TASK_RUNNING_BIT))
     {
         return OtaCloudUpdateStatus::NotReady;
     }
@@ -143,7 +150,13 @@ OtaCloudUpdateStatus EspAsyncOta::status() const
 tl::expected<void, std::string> EspAsyncOta::trigger(std::string_view url, std::string_view cert_pem,
                                                     std::string_view client_key, std::string_view client_cert)
 {
-    if (const auto bits = m_eventGroup.getBits(); !(bits & TASK_RUNNING))
+    if (!m_taskHandle)
+    {
+        if (auto result = startTask(); !result)
+            return tl::make_unexpected(std::move(result).error());
+    }
+
+    if (const auto bits = m_eventGroup.getBits(); !(bits & TASK_RUNNING_BIT))
         return tl::make_unexpected("ota cloud task not running");
     else if (bits & (START_REQUEST_BIT | REQUEST_RUNNING_BIT))
         return tl::make_unexpected("ota cloud already running");
@@ -169,16 +182,29 @@ tl::expected<void, std::string> EspAsyncOta::trigger(std::string_view url, std::
     return {};
 }
 
+tl::expected<void, std::string> EspAsyncOta::abort()
+{
+    if (const auto bits = m_eventGroup.getBits(); !(bits & (START_REQUEST_BIT | REQUEST_RUNNING_BIT)))
+        return tl::make_unexpected("no ota job is running!");
+    else if (bits & ABORT_REQUEST_BIT)
+        return tl::make_unexpected("an abort has already been requested!");
+
+    m_eventGroup.setBits(ABORT_REQUEST_BIT);
+    ESP_LOGI(TAG, "ota cloud update abort requested");
+
+    return {};
+}
+
 void EspAsyncOta::update()
 {
-    if (!m_taskHandle)
-    {
-        if (const auto result = startTask(); !result)
-        {
-            ESP_LOGE(TAG, "starting OTA task failed: %.*s", result.error().size(), result.error().data());
-            return;
-        }
-    }
+    //if (!m_taskHandle)
+    //{
+    //    if (const auto result = startTask(); !result)
+    //    {
+    //        ESP_LOGE(TAG, "starting OTA task failed: %.*s", result.error().size(), result.error().data());
+    //        return;
+    //    }
+    //}
 
     if (const auto bits = m_eventGroup.getBits(); bits & (START_REQUEST_BIT | REQUEST_RUNNING_BIT))
     {
@@ -229,9 +255,13 @@ void EspAsyncOta::update()
 
 void EspAsyncOta::otaTask()
 {
-    auto helper = cpputils::makeCleanupHelper([&](){ m_eventGroup.clearBits(TASK_RUNNING); vTaskDelete(NULL); });
+    auto helper = cpputils::makeCleanupHelper([&](){
+        m_eventGroup.clearBits(TASK_RUNNING_BIT);
+        m_taskHandle = NULL;
+        vTaskDelete(NULL);
+    });
 
-    m_eventGroup.setBits(TASK_RUNNING);
+    m_eventGroup.setBits(TASK_RUNNING_BIT);
 
     while (true)
     {
@@ -253,7 +283,10 @@ void EspAsyncOta::otaTask()
 
         m_eventGroup.setBits(REQUEST_RUNNING_BIT);
 
-        auto helper2 = cpputils::makeCleanupHelper([&](){ m_eventGroup.clearBits(REQUEST_RUNNING_BIT); m_eventGroup.setBits(REQUEST_FINISHED_BIT); });
+        auto helper2 = cpputils::makeCleanupHelper([&](){
+            m_eventGroup.clearBits(REQUEST_RUNNING_BIT | ABORT_REQUEST_BIT);
+            m_eventGroup.setBits(REQUEST_FINISHED_BIT);
+        });
 
         esp_http_client_config_t config{};
         config.url = m_url.c_str();
@@ -322,6 +355,7 @@ void EspAsyncOta::otaTask()
         }
 
         ESP_LOGI(TAG, "esp_https_ota_perform()...");
+        bool aborted{};
         esp_err_t ota_perform_err;
         {
             espchrono::millis_clock::time_point lastYield = espchrono::millis_clock::now();
@@ -337,6 +371,15 @@ void EspAsyncOta::otaTask()
                     lastYield = espchrono::millis_clock::now();
                     vPortYield();
                 }
+
+                if (m_eventGroup.clearBits(ABORT_REQUEST_BIT) & ABORT_REQUEST_BIT)
+                {
+                    ESP_LOGW(TAG, "abort request received");
+                    aborted = true;
+                    m_message = "Requested abort";
+                    ota_perform_err = ESP_FAIL;
+                    break;
+                }
             }
         }
         ESP_LOG_LEVEL_LOCAL((ota_perform_err == ESP_OK ? ESP_LOG_INFO : ESP_LOG_ERROR), TAG, "esp_https_ota_perform() returned: %s", esp_err_to_name(ota_perform_err));
@@ -346,14 +389,17 @@ void EspAsyncOta::otaTask()
         ESP_LOG_LEVEL_LOCAL((ota_finish_err == ESP_OK ? ESP_LOG_INFO : ESP_LOG_ERROR), TAG, "esp_https_ota_finish() returned: %s", esp_err_to_name(ota_finish_err));
 
 
-        if (ota_perform_err != ESP_OK)
-            m_message = fmt::format("{}() failed with {} (at {})", "esp_https_ota_perform",
-                                           esp_err_to_name(ota_perform_err), std::chrono::milliseconds{espchrono::millis_clock::now().time_since_epoch()}.count());
-        else if (ota_finish_err != ESP_OK)
-            m_message = fmt::format("{}() failed with {} (at {})", "esp_https_ota_finish",
-                                           esp_err_to_name(ota_finish_err), std::chrono::milliseconds{espchrono::millis_clock::now().time_since_epoch()}.count());
-        else
-            m_message.clear();
+        if (!aborted)
+        {
+            if (ota_perform_err != ESP_OK)
+                m_message = fmt::format("{}() failed with {} (at {})", "esp_https_ota_perform",
+                                               esp_err_to_name(ota_perform_err), std::chrono::milliseconds{espchrono::millis_clock::now().time_since_epoch()}.count());
+            else if (ota_finish_err != ESP_OK)
+                m_message = fmt::format("{}() failed with {} (at {})", "esp_https_ota_finish",
+                                               esp_err_to_name(ota_finish_err), std::chrono::milliseconds{espchrono::millis_clock::now().time_since_epoch()}.count());
+            else
+                m_message.clear();
+        }
 
         if (ota_perform_err == ESP_OK &&
             ota_finish_err == ESP_OK)

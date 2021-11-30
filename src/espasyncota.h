@@ -41,6 +41,7 @@ public:
     const std::optional<esp_app_desc_t> &appDesc() const { return m_appDesc; }
     OtaCloudUpdateStatus status() const;
     tl::expected<void, std::string> trigger(std::string_view url, std::string_view cert_pem, std::string_view client_key, std::string_view client_cert);
+    tl::expected<void, std::string> abort();
 
     void update();
 

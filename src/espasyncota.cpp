@@ -130,7 +130,7 @@ OtaCloudUpdateStatus EspAsyncOta::status() const
 {
     if (const auto bits = m_eventGroup.getBits(); !(bits & TASK_RUNNING_BIT))
     {
-        return OtaCloudUpdateStatus::NotReady;
+        return OtaCloudUpdateStatus::Idle;
     }
     else if (bits & (START_REQUEST_BIT | REQUEST_RUNNING_BIT))
     {

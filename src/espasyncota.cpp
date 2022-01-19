@@ -323,7 +323,7 @@ void EspAsyncOta::otaTask()
             if (result != ESP_OK)
             {
                 m_message = fmt::format("{}() failed with {} (at {})", "esp_https_ota_begin",
-                                        esp_err_to_name(result), std::chrono::milliseconds{espchrono::millis_clock::now().time_since_epoch()}.count());
+                                        esp_err_to_name(result), std::chrono::floor<std::chrono::milliseconds>(espchrono::millis_clock::now().time_since_epoch()).count());
                 continue;
             }
         }
@@ -331,7 +331,8 @@ void EspAsyncOta::otaTask()
         if (https_ota_handle == NULL)
         {
             ESP_LOGE(TAG, "ota handle invalid");
-            m_message = fmt::format("ota handle invalid (at {})", std::chrono::milliseconds{espchrono::millis_clock::now().time_since_epoch()}.count());
+            m_message = fmt::format("ota handle invalid (at {})",
+                                    std::chrono::floor<std::chrono::milliseconds>(espchrono::millis_clock::now().time_since_epoch()).count());
             continue;
         }
 
@@ -392,11 +393,15 @@ void EspAsyncOta::otaTask()
         if (!aborted)
         {
             if (ota_perform_err != ESP_OK)
-                m_message = fmt::format("{}() failed with {} (at {})", "esp_https_ota_perform",
-                                               esp_err_to_name(ota_perform_err), std::chrono::milliseconds{espchrono::millis_clock::now().time_since_epoch()}.count());
+                m_message = fmt::format("{}() failed with {} (at {})",
+                                        "esp_https_ota_perform",
+                                        esp_err_to_name(ota_perform_err),
+                                        std::chrono::floor<std::chrono::milliseconds>(espchrono::millis_clock::now().time_since_epoch()).count());
             else if (ota_finish_err != ESP_OK)
-                m_message = fmt::format("{}() failed with {} (at {})", "esp_https_ota_finish",
-                                               esp_err_to_name(ota_finish_err), std::chrono::milliseconds{espchrono::millis_clock::now().time_since_epoch()}.count());
+                m_message = fmt::format("{}() failed with {} (at {})",
+                                        "esp_https_ota_finish",
+                                        esp_err_to_name(ota_finish_err),
+                                        std::chrono::floor<std::chrono::milliseconds>(espchrono::millis_clock::now().time_since_epoch()).count());
             else
                 m_message.clear();
         }

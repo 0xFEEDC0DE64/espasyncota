@@ -293,7 +293,7 @@ void EspAsyncOta::otaTask()
         if (!m_cert_pem.empty())
         {
             config.cert_pem = m_cert_pem.data();
-            config.cert_len = m_cert_pem.size() - 1;
+            config.cert_len = m_cert_pem.size();
         }
         config.skip_cert_common_name_check = false;
 

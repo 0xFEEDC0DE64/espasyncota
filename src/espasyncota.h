@@ -23,7 +23,6 @@
     x(Succeeded) \
     x(NotReady)
 DECLARE_TYPESAFE_ENUM(OtaCloudUpdateStatus, : uint8_t, OtaCloudUpdateStatusValues)
-IMPLEMENT_TYPESAFE_ENUM(OtaCloudUpdateStatus, : uint8_t, OtaCloudUpdateStatusValues)
 
 class EspAsyncOta
 {

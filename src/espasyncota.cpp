@@ -24,11 +24,12 @@ constexpr const char * const TAG = "ASYNC_OTA";
 constexpr int TASK_RUNNING_BIT = BIT0;
 constexpr int START_REQUEST_BIT = BIT1;
 constexpr int REQUEST_RUNNING_BIT = BIT2;
-constexpr int REQUEST_FINISHED_BIT = BIT3;
-constexpr int REQUEST_SUCCEEDED_BIT = BIT4;
-constexpr int END_TASK_BIT = BIT5;
-constexpr int TASK_ENDED_BIT = BIT6;
-constexpr int ABORT_REQUEST_BIT = BIT7;
+constexpr int REQUEST_VERIFYING_BIT = BIT3;
+constexpr int REQUEST_FINISHED_BIT = BIT4;
+constexpr int REQUEST_SUCCEEDED_BIT = BIT5;
+constexpr int END_TASK_BIT = BIT6;
+constexpr int TASK_ENDED_BIT = BIT7;
+constexpr int ABORT_REQUEST_BIT = BIT8;
 } // namespace
 
 EspAsyncOta::EspAsyncOta(const char *taskName, uint32_t stackSize, espcpputils::CoreAffinity coreAffinity) :
@@ -60,7 +61,7 @@ tl::expected<void, std::string> EspAsyncOta::startTask()
         return tl::make_unexpected(msg);
     }
 
-    m_eventGroup.clearBits(TASK_RUNNING_BIT | START_REQUEST_BIT | REQUEST_RUNNING_BIT | REQUEST_FINISHED_BIT | REQUEST_SUCCEEDED_BIT | END_TASK_BIT | TASK_ENDED_BIT | ABORT_REQUEST_BIT);
+    m_eventGroup.clearBits(TASK_RUNNING_BIT | START_REQUEST_BIT | REQUEST_RUNNING_BIT | REQUEST_VERIFYING_BIT | REQUEST_FINISHED_BIT | REQUEST_SUCCEEDED_BIT | END_TASK_BIT | TASK_ENDED_BIT | ABORT_REQUEST_BIT);
 
     const auto result = espcpputils::createTask(otaTask, m_taskName, m_stackSize, this, 10, &m_taskHandle, m_coreAffinity);
     if (result != pdPASS)
@@ -131,6 +132,10 @@ OtaCloudUpdateStatus EspAsyncOta::status() const
     if (const auto bits = m_eventGroup.getBits(); !(bits & TASK_RUNNING_BIT))
     {
         return OtaCloudUpdateStatus::Idle;
+    }
+    else if (bits & REQUEST_VERIFYING_BIT)
+    {
+        return OtaCloudUpdateStatus::Verifying;
     }
     else if (bits & (START_REQUEST_BIT | REQUEST_RUNNING_BIT))
     {
@@ -211,7 +216,10 @@ void EspAsyncOta::update()
         if (!m_lastInfo || espchrono::ago(*m_lastInfo) >= 1s)
         {
             m_lastInfo = espchrono::millis_clock::now();
-            if (m_totalSize)
+
+            if (bits & REQUEST_VERIFYING_BIT)
+                ESP_LOGI(TAG, "OTA Verifying");
+            else if (m_totalSize)
                 ESP_LOGI(TAG, "OTA Progress %i of %i (%.2f%%)", m_progress, *m_totalSize, 100.f*m_progress / *m_totalSize);
             else
                 ESP_LOGI(TAG, "OTA Progress %i of unknown", m_progress);
@@ -275,6 +283,7 @@ void EspAsyncOta::otaTask()
             const auto bits = m_eventGroup.getBits();
             assert(!(bits & START_REQUEST_BIT));
             assert(!(bits & REQUEST_RUNNING_BIT));
+            assert(!(bits & REQUEST_VERIFYING_BIT));
             assert(!(bits & REQUEST_FINISHED_BIT));
             assert(!(bits & REQUEST_SUCCEEDED_BIT));
         }
@@ -284,7 +293,7 @@ void EspAsyncOta::otaTask()
         m_eventGroup.setBits(REQUEST_RUNNING_BIT);
 
         auto helper2 = cpputils::makeCleanupHelper([&](){
-            m_eventGroup.clearBits(REQUEST_RUNNING_BIT | ABORT_REQUEST_BIT);
+            m_eventGroup.clearBits(REQUEST_RUNNING_BIT | REQUEST_VERIFYING_BIT | ABORT_REQUEST_BIT);
             m_eventGroup.setBits(REQUEST_FINISHED_BIT);
         });
 
@@ -384,6 +393,9 @@ void EspAsyncOta::otaTask()
             }
         }
         ESP_LOG_LEVEL_LOCAL((ota_perform_err == ESP_OK ? ESP_LOG_INFO : ESP_LOG_ERROR), TAG, "esp_https_ota_perform() returned: %s", esp_err_to_name(ota_perform_err));
+
+        if (ota_perform_err == ESP_OK)
+            m_eventGroup.setBits(REQUEST_VERIFYING_BIT);
 
         ESP_LOGI(TAG, "esp_https_ota_finish()...");
         const auto ota_finish_err = esp_https_ota_finish(https_ota_handle);

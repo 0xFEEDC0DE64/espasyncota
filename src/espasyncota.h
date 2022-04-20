@@ -21,7 +21,8 @@
     x(Updating) \
     x(Failed) \
     x(Succeeded) \
-    x(NotReady)
+    x(NotReady) \
+    x(Verifying)
 DECLARE_TYPESAFE_ENUM(OtaCloudUpdateStatus, : uint8_t, OtaCloudUpdateStatusValues)
 
 class EspAsyncOta

@@ -1,5 +1,7 @@
 #include "espasyncota.h"
 
+#include "sdkconfig.h"
+
 // system includes
 #include <cassert>
 
@@ -7,6 +9,10 @@
 #include <esp_log.h>
 #include <esp_http_client.h>
 #include <esp_https_ota.h>
+#if defined(CONFIG_ESP_TASK_WDT_PANIC) || defined(CONFIG_ESP_TASK_WDT)
+#include <freertos/task.h>
+#include <esp_task_wdt.h>
+#endif
 
 // 3rdparty lib includes
 #include <fmt/core.h>
@@ -397,10 +403,31 @@ void EspAsyncOta::otaTask()
         if (ota_perform_err == ESP_OK)
             m_eventGroup.setBits(REQUEST_VERIFYING_BIT);
 
+
+#if defined(CONFIG_ESP_TASK_WDT_PANIC) || defined(CONFIG_ESP_TASK_WDT)
+        const auto taskHandle = xTaskGetCurrentTaskHandle();
+        if (taskHandle)
+        {
+            if (const auto result = esp_task_wdt_add(taskHandle); result != ESP_OK)
+                ESP_LOGE(TAG, "esp_task_wdt_add() failed with %s", esp_err_to_name(result));
+        }
+        else
+            ESP_LOGE(TAG, "could not get handle to current ota task!");
+#endif
+
         ESP_LOGI(TAG, "esp_https_ota_finish()...");
         const auto ota_finish_err = esp_https_ota_finish(https_ota_handle);
         ESP_LOG_LEVEL_LOCAL((ota_finish_err == ESP_OK ? ESP_LOG_INFO : ESP_LOG_ERROR), TAG, "esp_https_ota_finish() returned: %s", esp_err_to_name(ota_finish_err));
 
+#if defined(CONFIG_ESP_TASK_WDT_PANIC) || defined(CONFIG_ESP_TASK_WDT)
+        if (taskHandle)
+        {
+            if (const auto result = esp_task_wdt_reset(); result != ESP_OK)
+                ESP_LOGE(TAG, "esp_task_wdt_reset() failed with %s", esp_err_to_name(result));
+            if (const auto result = esp_task_wdt_delete(taskHandle); result != ESP_OK)
+                ESP_LOGE(TAG, "esp_task_wdt_delete() failed with %s", esp_err_to_name(result));
+        }
+#endif
 
         if (!aborted)
         {

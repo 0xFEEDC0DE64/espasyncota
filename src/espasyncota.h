@@ -5,7 +5,7 @@
 #include <string>
 
 // esp-idf includes
-#include <esp_app_format.h>
+#include <esp_app_desc.h>
 
 // 3rdparty lib includes
 #include <tl/expected.hpp>

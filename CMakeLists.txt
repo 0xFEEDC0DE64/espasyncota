@@ -8,6 +8,7 @@ set(sources
 
 set(dependencies
     esp_https_ota
+    esp_partition
 
     expected
     fmt

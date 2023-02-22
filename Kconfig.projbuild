@@ -1,0 +1,7 @@
+menu "ESPAsyncOTA"
+
+config ESPASYNCOTA_DISABLE_HEAP_CAPS_LOG
+    bool "Disable heap_caps_get_largest_free_block() log"
+    default n
+
+endmenu

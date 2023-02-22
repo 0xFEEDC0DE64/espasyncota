@@ -226,11 +226,18 @@ void EspAsyncOta::update()
             if (bits & REQUEST_VERIFYING_BIT)
                 ESP_LOGI(TAG, "OTA Verifying");
             else if (m_totalSize)
+#ifdef ESPASYNCOTA_DISABLE_HEAP_CAPS_LOG
+                ESP_LOGI(TAG, "OTA Progress %i of %i (%.2f%%) heap8=disabled",
+                         m_progress,
+                         *m_totalSize,
+                         100.f*m_progress / *m_totalSize);
+#else
                 ESP_LOGI(TAG, "OTA Progress %i of %i (%.2f%%) heap8=%zd",
                          m_progress,
                          *m_totalSize,
                          100.f*m_progress / *m_totalSize,
                          heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT));
+#endif
             else
                 ESP_LOGI(TAG, "OTA Progress %i of unknown", m_progress);
         }

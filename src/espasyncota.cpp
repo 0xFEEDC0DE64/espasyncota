@@ -51,20 +51,20 @@ EspAsyncOta::~EspAsyncOta()
     endTask();
 }
 
-tl::expected<void, std::string> EspAsyncOta::startTask()
+std::expected<void, std::string> EspAsyncOta::startTask()
 {
     if (m_taskHandle)
     {
         constexpr auto msg = "ota task handle is not null";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     if (const auto bits = m_eventGroup.getBits(); bits & TASK_RUNNING_BIT)
     {
         constexpr auto msg = "ota task already running";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     m_eventGroup.clearBits(TASK_RUNNING_BIT | START_REQUEST_BIT | REQUEST_RUNNING_BIT | REQUEST_VERIFYING_BIT | REQUEST_FINISHED_BIT | REQUEST_SUCCEEDED_BIT | END_TASK_BIT | TASK_ENDED_BIT | ABORT_REQUEST_BIT);
@@ -74,14 +74,14 @@ tl::expected<void, std::string> EspAsyncOta::startTask()
     {
         auto msg = fmt::format("failed creating ota task {}", result);
         ESP_LOGE(TAG, "%.*s", msg.size(), msg.data());
-        return tl::make_unexpected(std::move(msg));
+        return std::unexpected(std::move(msg));
     }
 
     if (!m_taskHandle)
     {
         constexpr auto msg = "ota task handle is null";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     ESP_LOGD(TAG, "created ota task %s", m_taskName);
@@ -100,7 +100,7 @@ tl::expected<void, std::string> EspAsyncOta::startTask()
     return {};
 }
 
-tl::expected<void, std::string> EspAsyncOta::endTask()
+std::expected<void, std::string> EspAsyncOta::endTask()
 {
     if (const auto bits = m_eventGroup.getBits();
         !(bits & TASK_RUNNING_BIT))
@@ -109,7 +109,7 @@ tl::expected<void, std::string> EspAsyncOta::endTask()
     {
         constexpr auto msg = "Another end request is already pending";
         ESP_LOGE(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     m_eventGroup.setBits(END_TASK_BIT);
@@ -158,29 +158,29 @@ OtaCloudUpdateStatus EspAsyncOta::status() const
     return OtaCloudUpdateStatus::Idle;
 }
 
-tl::expected<void, std::string> EspAsyncOta::trigger(std::string_view url, std::string_view cert_pem,
+std::expected<void, std::string> EspAsyncOta::trigger(std::string_view url, std::string_view cert_pem,
                                                     std::string_view client_key, std::string_view client_cert)
 {
     if (!m_taskHandle)
     {
         if (auto result = startTask(); !result)
-            return tl::make_unexpected(std::move(result).error());
+            return std::unexpected(std::move(result).error());
     }
 
     if (const auto bits = m_eventGroup.getBits(); !(bits & TASK_RUNNING_BIT))
-        return tl::make_unexpected("ota cloud task not running");
+        return std::unexpected("ota cloud task not running");
     else if (bits & (START_REQUEST_BIT | REQUEST_RUNNING_BIT))
-        return tl::make_unexpected("ota cloud already running");
+        return std::unexpected("ota cloud already running");
     else if (bits & REQUEST_FINISHED_BIT)
-        return tl::make_unexpected("ota cloud not fully finished, try again");
+        return std::unexpected("ota cloud not fully finished, try again");
     else
         assert(!(bits & REQUEST_SUCCEEDED_BIT));
 
     if (url.empty())
-        return tl::make_unexpected("empty firmware url");
+        return std::unexpected("empty firmware url");
 
     if (const auto result = esphttpdutils::urlverify(url); !result)
-        return tl::make_unexpected(fmt::format("could not verify firmware url: {}", result.error()));
+        return std::unexpected(fmt::format("could not verify firmware url: {}", result.error()));
 
     m_url = std::string{url};
     m_cert_pem = cert_pem;
@@ -193,12 +193,12 @@ tl::expected<void, std::string> EspAsyncOta::trigger(std::string_view url, std::
     return {};
 }
 
-tl::expected<void, std::string> EspAsyncOta::abort()
+std::expected<void, std::string> EspAsyncOta::abort()
 {
     if (const auto bits = m_eventGroup.getBits(); !(bits & (START_REQUEST_BIT | REQUEST_RUNNING_BIT)))
-        return tl::make_unexpected("no ota job is running!");
+        return std::unexpected("no ota job is running!");
     else if (bits & ABORT_REQUEST_BIT)
-        return tl::make_unexpected("an abort has already been requested!");
+        return std::unexpected("an abort has already been requested!");
 
     m_eventGroup.setBits(ABORT_REQUEST_BIT);
     ESP_LOGI(TAG, "ota cloud update abort requested");

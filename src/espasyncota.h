@@ -3,12 +3,10 @@
 // system includes
 #include <optional>
 #include <string>
+#include <expected>
 
 // esp-idf includes
 #include <esp_app_desc.h>
-
-// 3rdparty lib includes
-#include <tl/expected.hpp>
 
 // local includes
 #include "taskutils.h"
@@ -31,8 +29,8 @@ public:
     EspAsyncOta(const char *taskName="asyncOtaTask", uint32_t stackSize=4096, espcpputils::CoreAffinity coreAffinity=espcpputils::CoreAffinity::Core1);
     ~EspAsyncOta();
 
-    tl::expected<void, std::string> startTask();
-    tl::expected<void, std::string> endTask();
+    std::expected<void, std::string> startTask();
+    std::expected<void, std::string> endTask();
 
     int progress() const { return m_progress; }
     std::optional<int> totalSize() const { return m_totalSize; }
@@ -40,8 +38,8 @@ public:
     const std::string &message() const { return m_message; }
     const std::optional<esp_app_desc_t> &appDesc() const { return m_appDesc; }
     OtaCloudUpdateStatus status() const;
-    tl::expected<void, std::string> trigger(std::string_view url, std::string_view cert_pem, std::string_view client_key, std::string_view client_cert);
-    tl::expected<void, std::string> abort();
+    std::expected<void, std::string> trigger(std::string_view url, std::string_view cert_pem, std::string_view client_key, std::string_view client_cert);
+    std::expected<void, std::string> abort();
 
     void update();
 

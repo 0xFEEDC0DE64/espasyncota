@@ -38,7 +38,8 @@ public:
     const std::string &message() const { return m_message; }
     const std::optional<esp_app_desc_t> &appDesc() const { return m_appDesc; }
     OtaCloudUpdateStatus status() const;
-    std::expected<void, std::string> trigger(std::string_view url, std::string_view cert_pem, std::string_view client_key, std::string_view client_cert);
+    std::expected<void, std::string> trigger(std::string_view url, std::string_view cert_pem, bool use_global_ca,
+                                             std::string_view client_key, std::string_view client_cert);
     std::expected<void, std::string> abort();
 
     void update();
@@ -64,6 +65,7 @@ private:
 
     std::string m_url;
     std::string_view m_cert_pem;
+    bool m_use_global_ca;
     std::string_view m_client_key;
     std::string_view m_client_cert;
 };

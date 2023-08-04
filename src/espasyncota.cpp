@@ -13,6 +13,7 @@
 #include <freertos/task.h>
 #include <esp_task_wdt.h>
 #endif
+#include <esp_crt_bundle.h>
 
 // 3rdparty lib includes
 #include <fmt/core.h>
@@ -158,8 +159,8 @@ OtaCloudUpdateStatus EspAsyncOta::status() const
     return OtaCloudUpdateStatus::Idle;
 }
 
-std::expected<void, std::string> EspAsyncOta::trigger(std::string_view url, std::string_view cert_pem,
-                                                    std::string_view client_key, std::string_view client_cert)
+std::expected<void, std::string> EspAsyncOta::trigger(std::string_view url, std::string_view cert_pem, bool use_global_ca,
+                                                      std::string_view client_key, std::string_view client_cert)
 {
     if (!m_taskHandle)
     {
@@ -184,6 +185,7 @@ std::expected<void, std::string> EspAsyncOta::trigger(std::string_view url, std:
 
     m_url = std::string{url};
     m_cert_pem = cert_pem;
+    m_use_global_ca = use_global_ca;
     m_client_key = client_key;
     m_client_cert = client_cert;
 
@@ -322,6 +324,12 @@ void EspAsyncOta::otaTask()
             config.cert_len = m_cert_pem.size();
         }
         config.skip_cert_common_name_check = false;
+
+        if (m_use_global_ca)
+        {
+            //config.use_global_ca_store = true;
+            config.crt_bundle_attach = esp_crt_bundle_attach;
+        }
 
         if (!m_client_key.empty())
         {

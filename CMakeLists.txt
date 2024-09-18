@@ -10,8 +10,6 @@ set(dependencies
     esp_https_ota
     esp_partition
 
-    fmt
-
     cpputils
     espchrono
     espcpputils

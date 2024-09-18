@@ -15,9 +15,6 @@
 #endif
 #include <esp_crt_bundle.h>
 
-// 3rdparty lib includes
-#include <fmt/core.h>
-
 // local includes
 #include "cleanuphelper.h"
 #include "esphttpdutils.h"
@@ -73,7 +70,7 @@ std::expected<void, std::string> EspAsyncOta::startTask()
     const auto result = espcpputils::createTask(otaTask, m_taskName, m_stackSize, this, 10, &m_taskHandle, m_coreAffinity);
     if (result != pdPASS)
     {
-        auto msg = fmt::format("failed creating ota task {}", result);
+        auto msg = std::format("failed creating ota task {}", result);
         ESP_LOGE(TAG, "%.*s", msg.size(), msg.data());
         return std::unexpected(std::move(msg));
     }
@@ -181,7 +178,7 @@ std::expected<void, std::string> EspAsyncOta::trigger(std::string_view url, std:
         return std::unexpected("empty firmware url");
 
     if (const auto result = esphttpdutils::urlverify(url); !result)
-        return std::unexpected(fmt::format("could not verify firmware url: {}", result.error()));
+        return std::unexpected(std::format("could not verify firmware url: {}", result.error()));
 
     m_url = std::string{url};
     m_cert_pem = cert_pem;
@@ -356,7 +353,7 @@ void EspAsyncOta::otaTask()
             ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_INFO : ESP_LOG_ERROR), TAG, "esp_https_ota_begin() returned: %s", esp_err_to_name(result));
             if (result != ESP_OK)
             {
-                m_message = fmt::format("{}() failed with {} (at {})", "esp_https_ota_begin",
+                m_message = std::format("{}() failed with {} (at {})", "esp_https_ota_begin",
                                         esp_err_to_name(result), std::chrono::floor<std::chrono::milliseconds>(espchrono::millis_clock::now().time_since_epoch()).count());
                 continue;
             }
@@ -365,7 +362,7 @@ void EspAsyncOta::otaTask()
         if (https_ota_handle == NULL)
         {
             ESP_LOGE(TAG, "ota handle invalid");
-            m_message = fmt::format("ota handle invalid (at {})",
+            m_message = std::format("ota handle invalid (at {})",
                                     std::chrono::floor<std::chrono::milliseconds>(espchrono::millis_clock::now().time_since_epoch()).count());
             continue;
         }
@@ -451,12 +448,12 @@ void EspAsyncOta::otaTask()
         if (!aborted)
         {
             if (ota_perform_err != ESP_OK)
-                m_message = fmt::format("{}() failed with {} (at {})",
+                m_message = std::format("{}() failed with {} (at {})",
                                         "esp_https_ota_perform",
                                         esp_err_to_name(ota_perform_err),
                                         std::chrono::floor<std::chrono::milliseconds>(espchrono::millis_clock::now().time_since_epoch()).count());
             else if (ota_finish_err != ESP_OK)
-                m_message = fmt::format("{}() failed with {} (at {})",
+                m_message = std::format("{}() failed with {} (at {})",
                                         "esp_https_ota_finish",
                                         esp_err_to_name(ota_finish_err),
                                         std::chrono::floor<std::chrono::milliseconds>(espchrono::millis_clock::now().time_since_epoch()).count());
